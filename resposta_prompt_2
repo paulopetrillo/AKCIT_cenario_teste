@@ -1,0 +1,101 @@
+Conjunto de Dados de Teste — Integração Front-end ↔ Serviço REST de Resolução Algébrica
+Premissas explícitas (não presumidas):
+
+O contrato da API não foi especificado (rotas, payloads, códigos HTTP, formato de erros). Onde o comportamento da API é desconhecido, o resultado esperado é marcado como [API-INDEFINIDO] e o critério é "comportamento documentado e consistente".
+
+As regras matemáticas vêm do material de elicitação (item 3.1/3.2) e do ADR-001 (catálogo de propriedades e universos).
+
+O formato de entrada da equação (texto livre vs. editor estruturado) é lacuna (D03). Os casos usam notação textual canônica ax + b = cx + d como referência.
+
+Nível de assistência (validar vs. sugerir) é lacuna (D02). Os casos assumem "validar a propriedade escolhida".
+
+Casos degenerados (0x = 5, 0x = 0) e operações neutras são lacuna (D09/D10); marcados como [DECISÃO-PENDENTE].
+
+Separação obrigatória:
+
+MATEMÁTICO = resultado conhecido pela matemática (independe da API).
+
+API-INDEFINIDO = comportamento da API não especificado (não inventado).
+
+DECISÃO-PENDENTE = depende de regra de negócio ainda não decidida.
+
+1. Entradas válidas para equações do primeiro grau
+ID	Entrada enviada	Condição testada	Resultado esperado (matemático)	Justificativa	Classificação API
+V01	5x - 3 = x + 7, universo ℚ, passos ["inverso-aditivo","inverso-aditivo","inverso-multiplicativo"]	Fluxo feliz completo em ℚ	Solução {5/2}; histórico com 3 passos justificados	Item 3.2: 4x = 10 → x = 10/4 = 5/2	[API-INDEFINIDO] formato de payload/rota
+V02	2x + 1 = 7, universo ℤ, passo ["inverso-aditivo","inverso-multiplicativo"]	Resolução com solução inteira	Solução {3}	2x = 6 → x = 3, 3 ∈ ℤ	[API-INDEFINIDO]
+V03	x + 4 = 10, universo ℕ, passo ["inverso-aditivo"]	Solução natural	Solução {6}	x = 6, 6 ∈ ℕ	[API-INDEFINIDO]
+V04	(a + b) + c (propriedade associativa da soma, termos literais)	Reagrupamento sem avaliação	a + (b + c)	Associatividade da adição (item 3.1)	[API-INDEFINIDO]
+V05	(a × b) × c (propriedade associativa da multiplicação)	Reagrupamento sem avaliação	a × (b × c)	Associatividade da multiplicação (item 3.1)	[API-INDEFINIDO]
+V06	3x = 3x	Identidade — variável não isolável por passo único	[DECISÃO-PENDENTE] (D10)	Igualdade tautológica; comportamento não definido	[DECISÃO-PENDENTE]
+2. Entradas inválidas, malformadas ou incompletas
+ID	Entrada enviada	Condição testada	Resultado esperado	Justificativa	Classificação API
+I01	"" (equação vazia)	Ausência de conteúdo	Rejeição; nenhuma sessão criada	RF13 — validação sintática	[API-INDEFINIDO] código/erro
+I02	5x - 3 (sem =)	Falta de igualdade	Rejeição	RF13	[API-INDEFINIDO]
+I03	x = y = 3 (dois =)	Igualdade múltipla	Rejeição	RF13	[API-INDEFINIDO]
+I04	5x - 3 = (lado direito vazio)	Expressão incompleta	Rejeição	RF13	[API-INDEFINIDO]
+I05	5x - = 7 (operador sem operando)	Sintaxe inválida	Rejeição	RF13	[API-INDEFINIDO]
+I06	5x - 3 = x + 7, universo ausente	Parâmetro obrigatório faltando	Rejeição	Universo é obrigatório (RN02)	[API-INDEFINIDO]
+I07	5x - 3 = x + 7, universo "R"	Universo fora de {ℕ,ℤ,ℚ}	Rejeição	Universos suportados: ℕ, ℤ, ℚ	[API-INDEFINIDO]
+I08	5x - 3 = x + 7, passo "id-inexistente"	ID de propriedade inválido	Rejeição; estado inalterado	Catálogo do ADR-001	[API-INDEFINIDO]
+I09	5x² - 3 = x + 7	Equação de 2º grau	[DECISÃO-PENDENTE] (D01)	Escopo declarado: 1º grau	[DECISÃO-PENDENTE]
+I10	5x - 3 = x + 7, payload sem campo universo	Contrato incompleto	Rejeição	Contrato mínimo exige universo	[API-INDEFINIDO]
+3. Casos com diferentes conjuntos universo (ℕ, ℤ, ℚ)
+ID	Entrada enviada	Condição testada	Resultado esperado (matemático)	Justificativa	Classificação API
+U01	5x - 3 = x + 7, universo ℕ, passo ["inverso-aditivo"]	Operação não fechada em ℕ	Bloqueio do passo	Em ℕ não há oposto (item 3.1)	[API-INDEFINIDO]
+U02	5x - 3 = x + 7, universo ℕ, passo ["propriedade-aditiva"] (somar +3)	Operação fechada em ℕ	Passo aceito; 5x = x + 10	Propriedade aditiva + fechamento (item 3.2)	[API-INDEFINIDO]
+U03	4x = 10, universo ℤ, passo ["inverso-multiplicativo"]	Inverso multiplicativo em ℤ	Bloqueio	Inverso multiplicativo inexistente em ℤ (item 3.2)	[API-INDEFINIDO]
+U04	4x = 10, universo ℚ, passo ["inverso-multiplicativo"]	Inverso multiplicativo em ℚ	Passo aceito; x = 10/4 = 5/2	Item 3.2 (ℚ)	[API-INDEFINIDO]
+U05	x + 4 = 10, universo ℕ → ℚ, passo ["inverso-aditivo"] antes/depois da troca	Troca de universo no meio da resolução	Antes: bloqueio em ℕ; depois: aceito em ℚ	Regras por universo (RN03/RN05)	[API-INDEFINIDO] (L6/D07)
+U06	-x + 3 = 7, universo ℕ	Coeficiente negativo em ℕ	[DECISÃO-PENDENTE] (entrada)	Representação de negativo em ℕ não documentada	[DECISÃO-PENDENTE]
+4. Casos em que a solução matemática não pertence ao universo selecionado
+ID	Entrada enviada	Condição testada	Resultado esperado (matemático)	Justificativa	Classificação API
+N01	5x - 3 = x + 7 → 4x = 10, universo ℕ, isolar x	Solução 10/4 ∉ ℕ	"Não há solução em ℕ"	Item 3.2 (ℕ)	[API-INDEFINIDO] mensagem
+N02	4x = 10, universo ℤ, isolar x	Solução 2,5 ∉ ℤ	"Não há solução em ℤ"	Item 3.2 (ℤ)	[API-INDEFINIDO]
+N03	2x + 1 = 4, universo ℤ, isolar x	Solução 3/2 ∉ ℤ	"Não há solução em ℤ"	x = 1,5 ∉ ℤ	[API-INDEFINIDO]
+N04	x/2 = 3, universo ℕ, isolar x	Solução 6 ∈ ℕ (contraexemplo positivo)	Solução {6} aceita	x = 6 ∈ ℕ	[API-INDEFINIDO]
+N05	-2x = 8, universo ℕ	Solução -4 ∉ ℕ	"Não há solução em ℕ"	x = -4 ∉ ℕ	[API-INDEFINIDO]
+N06	-2x = 8, universo ℤ	Solução -4 ∈ ℤ	Solução {-4} aceita	-4 ∈ ℤ	[API-INDEFINIDO]
+5. Casos-limite relevantes (representação de números e equações)
+ID	Entrada enviada	Condição testada	Resultado esperado	Justificativa	Classificação API
+L01	0x = 5	Coeficiente zero, lado não nulo	[DECISÃO-PENDENTE] (D10)	Equação impossível — comportamento não definido	[DECISÃO-PENDENTE]
+L02	0x = 0	Identidade	[DECISÃO-PENDENTE] (D10)	Infinitas soluções — comportamento não definido	[DECISÃO-PENDENTE]
+L03	1/3 x = 2, universo ℚ	Coeficiente fracionário	x = 6	x = 2 ÷ (1/3) = 6, 6 ∈ ℚ	[API-INDEFINIDO]
+L04	0,5x = 2, universo ℚ	Coeficiente decimal	x = 4	x = 2 / 0,5 = 4	[API-INDEFINIDO]
+L05	x = 5 (variável já isolada)	Estado inicial já resolvido	Solução {5}	Trivial; verificar se API aceita	[API-INDEFINIDO]
+L06	5x - 3 = x + 7, aplicarPasso("propriedade-aditiva") somando 0 em ambos os lados	Operação neutra	[DECISÃO-PENDENTE] (D09)	Não avança a resolução	[DECISÃO-PENDENTE]
+L07	1.000.000x = 1.000.000, universo ℚ	Coeficientes grandes	x = 1	Divisão exata; testa representação	[API-INDEFINIDO]
+L08	x + 0 = 7	Elemento neutro explícito	x = 7	Neutro aditivo (item 3.1)	[API-INDEFINIDO]
+L09	1x = 7	Coeficiente 1 explícito	x = 7	Neutro multiplicativo	[API-INDEFINIDO]
+L10	-x = 7, universo ℚ	Coeficiente -1 implícito	x = -7	Multiplicação por -1	[API-INDEFINIDO]
+L11	x + 4 = 10, passo com ID "lei-cancelamento-adicao" sem termo comum	Pré-condição não satisfeita	Bloqueio	Lei do cancelamento exige termo comum (item 3.4)	[API-INDEFINIDO]
+L12	2x = 4, universo ℚ, tentar aplicarPasso("inverso-multiplicativo") duas vezes no mesmo estado	Reaplicação indevida	Primeiro aceito; segundo rejeitado	Variável já isolada / pré-condição violada	[API-INDEFINIDO]
+6. Legenda de classificação e lacunas
+Classificação
+MATEMÁTICO / resultado conhecido: independe da API; pode ser verificado por cálculo.
+
+[API-INDEFINIDO]: o resultado matemático é conhecido, mas o formato/contrato (rota, payload, código, mensagem) não foi especificado. Critério de aprovação: "comportamento documentado e consistente com o contrato que vier a ser definido".
+
+[DECISÃO-PENDENTE]: depende de regra de negócio ainda não decidida (D01, D09, D10, D02, D03). Não presumir.
+
+Lacunas que impedem fechar critérios de aprovação
+ID	Lacuna	Afeta
+G1	Contrato da API (rotas, payloads, códigos, erros)	Todos os [API-INDEFINIDO]
+G2	Formato de entrada da equação (D03)	V01–V06, I01–I10
+G3	Escopo 1º vs. 1º+2º grau (D01)	I09
+G4	Operações neutras e casos degenerados (D09/D10)	V06, L01, L02, L06
+G5	Representação de negativos em ℕ (entrada)	U06
+G6	Momento da troca de universo (D07/L6)	U05
+G7	Nível de assistência (D02)	Todos os V
+G8	Critérios de aceitação formais (D08)	Todos
+7. Observações para o testador
+Não comparar payloads literais enquanto G1 não for resolvido: validar semântica (passo aceito/bloqueado, histórico com ID válido, solução pertence ao universo).
+
+Separar asserções matemáticas de asserções de contrato: as primeiras podem ser automatizadas já; as segundas ficam pendentes de G1.
+
+Casos [DECISÃO-PENDENTE] devem ser mantidos como skipped explícitos no runner de testes, com referência à lacuna (ex.: it.skip("L01 — aguarda D10")).
+
+Determinismo: repetir cada caso válido ≥ 2 vezes e comparar resultados (N7).
+
+Rastreabilidade: cada passo aceito deve referenciar ID de propriedade válido (N5); incluir asserção em todos os casos válidos.
+
+Nenhuma regra inventada: onde o material não define (ex.: 0x = 0), o esperado é a decisão registrada, não uma suposição do testador.
