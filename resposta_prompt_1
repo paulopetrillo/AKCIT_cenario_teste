@@ -1,0 +1,402 @@
+Convenções dos cenários
+ID: TI-XX (Teste de Integração).
+
+Camadas envolvidas: FE (front-end), BE (back-end/núcleo), CAT (catálogo de propriedades/universos).
+
+Termos: "estado" = EstadoDaEquacao; "propriedade" = Strategy; "universo" = ℕ/ℤ/ℚ.
+
+Critério de aprovação: binário (passa/falha) quando o contrato está definido; condicional quando depende de lacuna.
+
+TI-01 — Fluxo de resolução bem-sucedido (ℚ)
+Objetivo: validar o caminho feliz completo: inserir equação, escolher universo, aplicar propriedades passo a passo, isolar variável e obter solução válida em ℚ.
+
+Pré-condições:
+
+Núcleo disponível e catálogo carregado (propriedades e universos).
+
+Universo ℚ selecionado.
+
+Contrato de API definido [API_CONTRATO_A_DEFINIR].
+
+Dados de entrada:
+
+Equação: 4x = 10 (estado inicial derivado de 5x - 3 = x + 7, conforme item 3.2 do material).
+
+Universo: ℚ.
+
+Sequência de propriedades: ["inverso-aditivo", "inverso-multiplicativo"] (IDs do catálogo do ADR-001).
+
+Sequência de execução:
+
+FE envia criação de sessão de resolução com equação e universo.
+BE cria EstadoDaEquacao e devolve estado inicial.
+FE envia aplicarPasso("inverso-aditivo").
+BE valida pré-condições via RegraDosRacionais, aplica e registra no histórico.
+FE envia aplicarPasso("inverso-multiplicativo").
+BE aplica, registra e marca variável isolada.
+FE solicita verificarSolucao().
+Resultado esperado:
+
+Estado final com variável isolada.
+
+Histórico com 2 entradas, cada uma com ID e nome formal da propriedade.
+
+Solução {5/2} aceita em ℚ.
+
+Critérios de aprovação:
+
+Cada passo retorna sucesso e o histórico referencia ID válido (N5).
+
+Determinismo: repetir a sequência produz o mesmo resultado (N7).
+
+Solução validada por RegraDosRacionais (RN05/RN08).
+
+TI-02 — Entrada inválida ou incompleta
+Objetivo: garantir que o sistema rejeita entradas malformadas ou incompletas sem corromper estado nem histórico.
+
+Pré-condições: sessão não criada ou em estado inicial; contrato de erro definido [API_CONTRATO_A_DEFINIR].
+
+Dados de entrada (variações):
+
+(a) equação vazia;
+
+(b) equação sem sinal de igualdade (5x - 3);
+
+(c) equação com dois sinais de igualdade (x = y = 3);
+
+(d) universo ausente ou fora de {ℕ, ℤ, ℚ};
+
+(e) ID de propriedade inexistente no catálogo.
+
+Sequência de execução:
+
+FE envia cada variação isoladamente.
+BE valida sintaxe (RF13) e parâmetros obrigatórios.
+BE responde com erro de validação [CÓDIGO_A_DEFINIR].
+Resultado esperado:
+
+Nenhuma sessão criada (a–d) ou nenhum passo aplicado (e).
+
+Estado e histórico inalterados.
+
+Mensagem de erro indica o campo inválido, sem detalhes internos.
+
+Critérios de aprovação:
+
+100% das variações rejeitadas.
+
+Nenhum efeito colateral no estado/histórico.
+
+Código/formato de erro conforme contrato [condicional a D03/D05].
+
+TI-03 — Equação incompatível com operações permitidas no universo (ℕ)
+Objetivo: verificar que o núcleo bloqueia operações que violam o fechamento do universo selecionado.
+
+Pré-condições: sessão ativa em ℕ; catálogo de universos carregado.
+
+Dados de entrada:
+
+Equação: 5x - 3 = x + 7.
+
+Universo: ℕ.
+
+Propriedade solicitada: "inverso-aditivo" (não aplicável em ℕ — RN03).
+
+Sequência de execução:
+
+FE envia aplicarPasso("inverso-aditivo").
+BE consulta RegraDosNaturais.elementoExiste(oposto) → falha.
+BE responde bloqueio com justificativa formal.
+Resultado esperado:
+
+Passo não aplicado; estado inalterado.
+
+Histórico não recebe entrada.
+
+Mensagem indica a propriedade bloqueada e o motivo (elemento inexistente em ℕ).
+
+Critérios de aprovação:
+
+Bloqueio 100% conforme matriz operação × universo (RNF-D).
+
+Nenhuma entrada no histórico para passos bloqueados.
+
+Mensagem sem terminologia informal (RN07).
+
+TI-04 — Ausência de solução válida no conjunto selecionado (ℕ e ℤ)
+Objetivo: verificar que o sistema reconhece quando a solução não pertence ao universo e permite troca de universo.
+
+Pré-condições: sessão ativa; catálogo de universos disponível.
+
+Dados de entrada:
+
+Equação: 5x - 3 = x + 7.
+
+Universo inicial: ℕ → após passos válidos, chega-se a 4x = 10 (item 3.2).
+
+Tentativa de isolar x em ℕ: x = 10/4 ∉ ℕ.
+
+Repetição em ℤ: x = 2,5 ∉ ℤ.
+
+Sequência de execução:
+
+FE aplica passos válidos até 4x = 10 em ℕ.
+FE solicita verificarSolucao().
+BE consulta RegraDosNaturais.solucaoPertence(10/4) → falha → "não há solução em ℕ".
+FE troca para ℤ (trocarUniverso(Z, RegraDosInteiros)); histórico registra a troca.
+FE solicita verificarSolucao() em ℤ → falha → "não há solução em ℤ".
+FE troca para ℚ → solução {5/2} aceita.
+Resultado esperado:
+
+Mensagens distintas por universo: "não há solução em ℕ", "não há solução em ℤ".
+
+Histórico preserva passos anteriores e registra cada troca de universo.
+
+Em ℚ, solução {5/2} aceita.
+
+Critérios de aprovação:
+
+solucaoPertence retorna falha coerente em ℕ e ℤ (RN03/RN04/RN08).
+
+Troca de universo não perde histórico (N6).
+
+Solução final em ℚ coerente com item 3.2 do material.
+
+TI-05 — Erros de comunicação entre front-end e back-end
+Objetivo: verificar que o FE lida com falhas de transporte (timeout, conexão perdida, resposta tardia) sem corromper o estado local nem exibir resultados falsos.
+
+Pré-condições: sessão ativa; timeout e retry não especificados (lacuna L9) → usar placeholders.
+
+Dados de entrada:
+
+Requisição aplicarPasso("propriedade-aditiva") com:
+
+(a) timeout no BE;
+
+(b) conexão interrompida após envio, antes da resposta;
+
+(c) resposta duplicada (retry do FE) para o mesmo passo.
+
+Sequência de execução:
+
+FE envia passo; BE não responde dentro de [TIMEOUT_A_DEFINIR].
+FE trata como falha de comunicação (não como sucesso).
+FE não atualiza o estado local nem o histórico.
+Em retry (c), FE verifica idempotência [IDEMPOTENCIA_A_DEFINIR].
+Resultado esperado:
+
+Estado local e histórico permanecem consistentes com o último passo confirmado.
+
+Mensagem ao usuário indicando falha de comunicação, sem detalhes internos.
+
+Em (c), o passo não é aplicado duas vezes.
+
+Critérios de aprovação:
+
+Nenhum passo "fantasma" no histórico.
+
+Retry não duplica entradas [condicional a L9 — idempotência].
+
+Consistência de estado verificável por desfazerUltimoPasso() (N6).
+
+TI-06 — Respostas incompletas ou incompatíveis com o contrato da API
+Objetivo: verificar que o FE rejeita respostas do BE que não cumprem o contrato (campos ausentes, tipos errados, ID de propriedade inválido, estado inconsistente).
+
+Pré-condições: contrato de API definido [API_CONTRATO_A_DEFINIR]; BE instrumentado para simular respostas defeituosas.
+
+Dados de entrada (variações):
+
+(a) resposta sem idPropriedade no histórico;
+
+(b) resposta com idPropriedade inexistente no catálogo;
+
+(c) resposta com estado sem versao;
+
+(d) resposta com solução fora do universo declarado;
+
+(e) resposta com sucesso, mas sem novo estado.
+
+Sequência de execução:
+
+FE envia passo; BE retorna resposta defeituosa simulada.
+FE valida resposta contra o contrato.
+FE rejeita e mantém o estado anterior.
+Resultado esperado:
+
+FE não aceita resposta incompatível.
+
+Estado local e histórico inalterados.
+
+Erro registrado para observabilidade (sem dados sensíveis).
+
+Critérios de aprovação:
+
+100% das variações rejeitadas.
+
+Nenhum passo sem ID válido é aceito (N5/R2).
+
+Solução fora do universo declarado é rejeitada (RN08).
+
+TI-07 — Undo e consistência de estado entre FE e BE
+Objetivo: verificar que o undo restaura exatamente o estado anterior em ambos os lados e que o histórico permanece consistente.
+
+Pré-condições: sessão com ≥ 2 passos confirmados; histórico sincronizado.
+
+Dados de entrada:
+
+Sequência: aplicarPasso("propriedade-aditiva"), aplicarPasso("lei-cancelamento-adicao").
+
+Solicitação: desfazerUltimoPasso().
+
+Sequência de execução:
+
+FE aplica dois passos; BE confirma e registra.
+FE solicita undo; BE desempilha e retorna estado anterior.
+FE compara estado retornado com o snapshot local.
+Resultado esperado:
+
+Estado após undo = estado antes do último passo (N6).
+
+Histórico com uma entrada a menos.
+
+Nenhuma entrada órfã.
+
+Critérios de aprovação:
+
+Igualdade exata entre estados (testes de propriedade — N6).
+
+Histórico consistente em FE e BE.
+
+Repetir undo até esvaziar retorna falha controlada ("nada a desfazer").
+
+TI-08 — Troca de universo preserva histórico e ortogonalidade
+Objetivo: verificar que a troca de universo é registrada, não perde passos anteriores e não mistura regras de universo nas propriedades.
+
+Pré-condições: sessão ativa em ℕ com passos válidos; catálogo de universos carregado.
+
+Dados de entrada:
+
+Sequência em ℕ: aplicarPasso("propriedade-aditiva"), aplicarPasso("lei-cancelamento-adicao").
+
+Troca: trocarUniverso(Q, RegraDosRacionais).
+
+Passo em ℚ: aplicarPasso("inverso-multiplicativo").
+
+Sequência de execução:
+
+FE aplica passos em ℕ.
+FE solicita troca de universo; BE registra a troca no histórico.
+FE aplica passo em ℚ.
+Inspeção: nenhuma propriedade contém lógica de ℚ embutida.
+Resultado esperado:
+
+Histórico contém entradas de ℕ + registro de troca + entrada de ℚ.
+
+Passos anteriores preservados.
+
+Ortogonalidade propriedade × universo mantida (N2/R3).
+
+Critérios de aprovação:
+
+Histórico íntegro (N6).
+
+Inspeção estática: nenhuma propriedade referencia regra de universo (R3).
+
+Solução final validada pela regra vigente (RN08).
+
+TI-09 — Determinação de propriedade pelo ID (seleção determinística)
+Objetivo: verificar que a seleção por ID é determinística e rastreável, e que IDs inválidos são rejeitados.
+
+Pré-condições: catálogo carregado; sessão ativa.
+
+Dados de entrada:
+
+(a) aplicarPasso("inverso-aditivo") em ℚ;
+
+(b) aplicarPasso("id-inexistente");
+
+(c) aplicarPasso("inverso-aditivo") em ℕ (não aplicável);
+
+(d) repetição de (a) em estado idêntico.
+
+Sequência de execução:
+
+FE envia cada caso.
+BE usa SeletorDePropriedade.selecionar(id, universo).
+BE aplica ou rejeita.
+Resultado esperado:
+
+(a) sucesso; (b) falha "propriedade inexistente"; (c) falha "não aplicável ao universo"; (d) mesmo resultado que (a).
+
+Critérios de aprovação:
+
+Nenhuma seleção "a primeira que couber" (N5/N7/R2).
+
+Histórico registra o ID aplicado.
+
+Determinismo em (d).
+
+TI-10 — Operação neutra e casos degenerados (comportamento a confirmar)
+Objetivo: verificar o comportamento do sistema diante de operações válidas que não avançam a resolução e de equações degeneradas.
+
+Pré-condições: decisão pendente (D09/D10) → cenário condicional.
+
+Dados de entrada:
+
+(a) aplicarPasso("propriedade-aditiva") somando 0 em ambos os lados;
+
+(b) equação 0x = 5 (sem solução);
+
+(c) equação 0x = 0 (identidade).
+
+Sequência de execução:
+
+FE envia cada caso.
+BE aplica a regra vigente [REGRA_A_DEFINIR].
+Resultado esperado (a confirmar):
+
+(a) permitido, alertado ou bloqueado conforme decisão;
+
+(b) "não há solução";
+
+(c) "infinitas soluções" ou equivalente.
+
+Critérios de aprovação:
+
+Comportamento coerente com a decisão registrada em D09/D10.
+
+Mensagens formais (RN07).
+
+Condicional: sem decisão, o critério é apenas "comportamento documentado e consistente".
+
+Matriz de rastreabilidade (cenário → necessidade/regra)
+Cenário	Necessidades/Regras cobertas
+TI-01	N4, N5, N7, RN05, RN08
+TI-02	RF13, N7, RN07
+TI-03	N2, RNF-D, RN03
+TI-04	RN03, RN04, RN08, N6
+TI-05	N6, N8, L9 (timeout/idempotência)
+TI-06	N5, RN08, R2
+TI-07	N6, RNF-C
+TI-08	N2, N6, R3
+TI-09	N5, N7, R2
+TI-10	N10, D09, D10
+Lacunas que impedem fechar os critérios de aprovação
+ID	Lacuna	Afeta
+G1	Contrato de API (rotas, payloads, códigos de erro)	TI-01, TI-02, TI-06
+G2	Formato de entrada da equação (D03)	TI-02
+G3	Timeout, retry e idempotência (L9)	TI-05
+G4	Decisão sobre operações neutras e casos degenerados (D09/D10)	TI-10
+G5	Critérios de aceitação formais e métricas pedagógicas (D08/D12)	Todos
+G6	Plataforma, perfis e autenticação (D04/D05)	TI-01 a TI-09 (setup)
+G7	Alvo de latência (RNF-B)	TI-01, TI-05
+G8	Nível de assistência (validar vs. sugerir — D02)	TI-01, TI-09
+G9	Observabilidade e política de logs (L10)	TI-05, TI-06
+Observações finais
+Nenhum endpoint, código HTTP ou regra matemática foi inventado. Onde o contrato não existe, o cenário usa [API_CONTRATO_A_DEFINIR] e marca o critério como condicional.
+
+Regras matemáticas usadas vêm do material (item 3.2) e do ADR-001 (catálogo de propriedades/universos).
+
+Ordem sugerida de execução: TI-01 (caminho feliz) → TI-03/TI-04 (universo) → TI-07/TI-08 (estado/histórico) → TI-02/TI-06 (contrato) → TI-05 (comunicação) → TI-09/TI-10 (condicionais).
+
+Pré-requisito para automatizar: resolver G1, G3 e G4; sem isso, os cenários correspondentes ficam manuais e com critério condicional.
